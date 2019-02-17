@@ -24,9 +24,15 @@
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
-#define SAMPLE_PER_SENSOR 20
+#define SAMPLE_PER_SENSOR 10
 #define SENSOR_ADDRESS_OFFSET 48 //0x30
 #define NUMBER_OF_SENSOR 4
+
+unsigned int dataSensor1[SAMPLE_PER_SENSOR];
+unsigned int dataSensor2[SAMPLE_PER_SENSOR];
+unsigned int dataSensor3[SAMPLE_PER_SENSOR];
+unsigned int dataSensor4[SAMPLE_PER_SENSOR];
+
 
 //---------------------------------------------------------------------
 //configure_PIC:
@@ -84,7 +90,7 @@ void configure_Sensor(unsigned char address)
 //read_Sensor:
 //configuration d'un capteur SI7210 via i2c
 //---------------------------------------------------------------------
-void read_Sensor(unsigned char address, unsigned char *dataRead)
+void read_Sensor(unsigned char address, unsigned char dataRead[])
 {
     
     i2c_Start();
@@ -102,15 +108,7 @@ void read_Sensor(unsigned char address, unsigned char *dataRead)
 //get_Standard_Deviation:
 //calcul de l'écart type 
 //---------------------------------------------------------------------
-void get_Standard_Deviation(unsigned char *actualCurrentPerSensor)
-{
-
-}
-
-//---------------------------------------------------------------------
-//append_Data:
-//---------------------------------------------------------------------
-void append_Data(unsigned int sensorIndex, unsigned char *readDataBuffer)
+void get_Standard_Deviation(unsigned char actualCurrentPerSensor[])
 {
 
 }
@@ -132,9 +130,11 @@ void calibration_Data()
 //---------------------------------------------------------------------
 void main(void) 
 {
-    unsigned char readDataBuffer[2];
-    unsigned char dataSensor[SAMPLE_PER_SENSOR][NUMBER_OF_SENSOR];
+    unsigned char bufferData[2];
+
     unsigned int actualCurrentPerSensor[NUMBER_OF_SENSOR];
+    
+    unsigned int signal = 0;
     
     unsigned int dataCount=  0;
     configure_PIC();
@@ -143,12 +143,24 @@ void main(void)
     while(1)
     {
         for (int sensorIndex= 0; sensorIndex<4; sensorIndex++)
-        {
-            read_Sensor(sensorIndex, &readDataBuffer[1]);// à modifier on veut pas juste passer le char 1
-            append_Data(sensorIndex,&readDataBuffer[1]);
+        {   
+            read_Sensor(sensorIndex, bufferData);
+            //TODO treatment:
+            //signal = (bufferData[0] & 0x7F) << 8 | bufferData[1]
             
+            switch(sensorIndex)
+            {
+                case 0:
+                    dataSensor1[dataCount] = signal;
+                case 1:
+                    dataSensor2[dataCount] = signal;
+                case 2:
+                    dataSensor3[dataCount] = signal;
+                case 3: 
+                    dataSensor4[dataCount] = signal;      
+            }
             
-            
+            dataCount = dataCount + 1 % SAMPLE_PER_SENSOR; //circular buffer
         }
         
     }
