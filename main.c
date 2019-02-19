@@ -155,7 +155,7 @@ void main(void)
     
     while(1)
     {
-        for (int sensorIndex= 0; sensorIndex<4; sensorIndex++)
+        for (unsigned char sensorIndex= 0; sensorIndex<4; sensorIndex++)
         {   
             read_Sensor(sensorIndex, bufferData);
             //TODO treatment:
