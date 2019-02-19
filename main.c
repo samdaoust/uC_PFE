@@ -11,11 +11,10 @@
 #include "const.h"
 #include "i2c.h"
 
+
 // set Config bits
 #pragma config FOSC=INTOSC
 //TODO set config bit !!!
-
-
 
 
 
@@ -24,15 +23,11 @@
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
-#define SAMPLE_PER_SENSOR 10
+#define SAMPLES_PER_SENSOR 50
 #define SENSOR_ADDRESS_OFFSET 48 //0x30
 #define NUMBER_OF_SENSOR 4
 
-unsigned int dataSensor1[SAMPLE_PER_SENSOR];
-unsigned int dataSensor2[SAMPLE_PER_SENSOR];
-unsigned int dataSensor3[SAMPLE_PER_SENSOR];
-unsigned int dataSensor4[SAMPLE_PER_SENSOR];
-
+unsigned int dataSensor[SAMPLES_PER_SENSOR];
 
 //---------------------------------------------------------------------
 //configure_PIC:
@@ -43,8 +38,7 @@ void configure_PIC()
     OSCCONbits.SPLLEN=0;    //PLL off
     OSCCONbits.IRCF=0x0F;   //OSC frequency = 16MHz
     OSCCONbits.SCS=0x02;    //internal oscillator block
-    
-    
+   
     // PORT A Assignments
     TRISAbits.TRISA0 = INPUT_PIN;	// RA0 = SDA
     TRISAbits.TRISA1 = INPUT_PIN ;	// RA1 = SCLK
@@ -92,7 +86,6 @@ void configure_Sensor(unsigned char address)
 //---------------------------------------------------------------------
 void read_Sensor(unsigned char address, unsigned char dataRead[])
 {
-    
     i2c_Start();
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_DSPSIGM);
@@ -100,17 +93,34 @@ void read_Sensor(unsigned char address, unsigned char dataRead[])
     i2c_Address(address, I2C_READ);
     dataRead[0] = i2c_Read(1);
     dataRead[1] = i2c_Read(0);
-
 }
-
 
 //---------------------------------------------------------------------
 //get_Standard_Deviation:
 //calcul de l'écart type 
 //---------------------------------------------------------------------
-void get_Standard_Deviation(unsigned char actualCurrentPerSensor[])
+unsigned int get_Standard_Deviation(unsigned char actualCurrentPerSensor[])
 {
-
+    unsigned int standardDeviation = 0;
+    float average = 0;
+    unsigned int sum = 0;
+    
+    //calcul de la moyenne
+    for(unsigned int sampleIndex = 0; sampleIndex<SAMPLES_PER_SENSOR;sampleIndex++)
+    {
+        average += actualCurrentPerSensor[sampleIndex];
+    }
+    average = average / SAMPLES_PER_SENSOR;
+           
+    //calcul de l'écart-type
+    for(unsigned int sampleIndex = 0; sampleIndex<SAMPLES_PER_SENSOR;sampleIndex++)
+    {
+        sum+= (actualCurrentPerSensor[sampleIndex] - average) * 
+                                         (actualCurrentPerSensor[sampleIndex] - average);
+    }
+    standardDeviation = sum / SAMPLES_PER_SENSOR;
+    
+    return standardDeviation;
 }
 
 
@@ -119,6 +129,8 @@ void get_Standard_Deviation(unsigned char actualCurrentPerSensor[])
 //---------------------------------------------------------------------
 void calibration_Data()
 {
+    
+    
 
 }
 
@@ -135,6 +147,7 @@ void main(void)
     unsigned int actualCurrentPerSensor[NUMBER_OF_SENSOR];
     
     unsigned int signal = 0;
+    // unsigned int signal = 0;
     
     unsigned int dataCount=  0;
     configure_PIC();
@@ -151,16 +164,17 @@ void main(void)
             switch(sensorIndex)
             {
                 case 0:
-                    dataSensor1[dataCount] = signal;
+                    dataSensor[dataCount] = signal;
+                /*    
                 case 1:
                     dataSensor2[dataCount] = signal;
                 case 2:
                     dataSensor3[dataCount] = signal;
                 case 3: 
-                    dataSensor4[dataCount] = signal;      
+                    dataSensor4[dataCount] = signal; 
+                 */     
             }
-            
-            dataCount = dataCount + 1 % SAMPLE_PER_SENSOR; //circular buffer
+            dataCount = dataCount + 1 % SAMPLES_PER_SENSOR; //circular buffer
         }
         
     }
