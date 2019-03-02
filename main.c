@@ -7,22 +7,42 @@
  * Created on February 16, 2019, 4:31 PM
  */
 
+
+// CONFIG1
+#pragma config FOSC = INTOSC    // Oscillator Selection (INTOSC oscillator: I/O function on CLKIN pin)
+#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
+#pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
+#pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR)
+#pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
+#pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled)
+#pragma config BOREN = ON       // Brown-out Reset Enable (Brown-out Reset enabled)
+#pragma config CLKOUTEN = ON   // Clock Out Enable (CLKOUT function is disabled. I/O or oscillator function on the CLKOUT pin)
+#pragma config IESO = ON        // Internal/External Switchover (Internal/External Switchover mode is enabled)
+#pragma config FCMEN = ON       // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is enabled)
+
+// CONFIG2
+#pragma config WRT = OFF        // Flash Memory Self-Write Protection (Write protection off)
+#pragma config PLLEN = ON       // PLL Enable (4x PLL enabled)
+#pragma config STVREN = ON      // Stack Overflow/Underflow Reset Enable (Stack Overflow or Underflow will cause a Reset)
+#pragma config BORV = LO        // Brown-out Reset Voltage Selection (Brown-out Reset Voltage (Vbor), low trip point selected.)
+#pragma config LVP = ON         // Low-Voltage Programming Enable (Low-voltage programming enabled)
+
+// #pragma config statements should precede project file includes.
+// Use project enums instead of #define for ON and OFF.
+
+
 #include <xc.h>
 #include "const.h"
 #include "i2c.h"
 
 
-// set Config bits
-#pragma config FOSC=INTOSC
-//TODO set config bit !!!
-
 
 //DEFINITIONS
-//#define _XTAL_FREQ  16000000        // this is used by the __delay_ms(xx) and __delay_us(xx) functions
+#define _XTAL_FREQ  32000000
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
-#define SAMPLES_PER_SENSOR 90
+#define SAMPLES_PER_SENSOR 5
 #define SENSOR_1_ADDRESS 48 //0x30
 #define SENSOR_2_ADDRESS 49 //0x31
 #define SENSOR_3_ADDRESS 50 //0x32
@@ -52,9 +72,13 @@ unsigned char dummyButtonPRESSED = 0;
 //---------------------------------------------------------------------
 void configure_PIC()
 {
-    OSCCONbits.SPLLEN=0;    //PLL off
-    OSCCONbits.IRCF=0x0F;   //OSC frequency = 16MHz
-    OSCCONbits.SCS=0x02;    //internal oscillator block
+   OSCCONbits.SPLLEN=0;    //PLL off
+   OSCCONbits.IRCF=0x0F;   //OSC frequency = 16MHz
+   OSCCONbits.SCS=0x02;    //internal oscillator block
+   
+   //OSCCON = 0b01111010;
+   
+   
    
     //TODO RECONFIGURER AVEC NOUVEAU PIC ET PINOUT
     // PORT A Assignments
@@ -62,8 +86,8 @@ void configure_PIC()
     TRISAbits.TRISA1 = INPUT_PIN ;	// RA1 = SCLK
     TRISAbits.TRISA2 = OUTPUT_PIN ;	// RA2 = LED
     TRISAbits.TRISA3 = INPUT_PIN;	// RA3 = Vpp / bouton
-    TRISAbits.TRISA4 = OUTPUT_PIN;	// RA4 = TX UART
-    TRISAbits.TRISA5 = OUTPUT_PIN;	// RA5 =  RX UART
+    TRISAbits.TRISA4 = INPUT_PIN;	// RA4 = TX UART
+    TRISAbits.TRISA5 = INPUT_PIN;	// RA5 =  RX UART
     
     ANSELA=0x1F;		// digital I/O
 }
@@ -117,7 +141,7 @@ void read_Sensor(unsigned char address, unsigned char dataRead[])
 //get_Standard_Deviation:
 //calcul de l'écart type 
 //---------------------------------------------------------------------
-unsigned int get_Standard_Deviation(unsigned char dataSensor[])
+unsigned int get_Standard_Deviation(unsigned char *dataSensor)
 {
     unsigned int standardDeviation = 0;
     float average = 0;
@@ -166,21 +190,34 @@ void main(void)
     
     //CONFIGURATION uC
     configure_PIC();
+    
+    RA2 = 1;
+    __delay_ms(300);
+    RA2 = 0;
+    __delay_ms(300);
     i2c_Init();
     
     //CONFIGURATION DES CAPTEURS
     configure_Sensor(SENSOR_1_ADDRESS);
-    configure_Sensor(SENSOR_2_ADDRESS);
-    configure_Sensor(SENSOR_3_ADDRESS);
-    configure_Sensor(SENSOR_4_ADDRESS);
+    //configure_Sensor(SENSOR_2_ADDRESS);
+    //configure_Sensor(SENSOR_3_ADDRESS);
+    //configure_Sensor(SENSOR_4_ADDRESS);
     
     //BOUCLE DE LECTURE DES CAPTEURS
     while(1)
     {
+        RA2 = 1;
+        __delay_ms(300);
+        RA2 = 0;
+        __delay_ms(300);
+        
+        
+        /*
         for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
         {   
-            read_Sensor(sensorIndex, bufferData);
-            signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
+            //read_Sensor(sensorIndex, bufferData);
+            //signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
+
             
             switch(sensorIndex)
             {
@@ -200,16 +237,19 @@ void main(void)
         if (dataCount == SAMPLES_PER_SENSOR)
         {
             //update écart type
-            currentSensorValues[SENSOR_1_ID] = get_Standard_Deviation(dataSensor1);
-            currentSensorValues[SENSOR_2_ID] = get_Standard_Deviation(dataSensor2);
-            currentSensorValues[SENSOR_3_ID] = get_Standard_Deviation(dataSensor3);
-            currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(dataSensor4);
+            //currentSensorValues[SENSOR_1_ID] = get_Standard_Deviation(&dataSensor1);
+            //currentSensorValues[SENSOR_2_ID] = get_Standard_Deviation(&dataSensor2);
+            //currentSensorValues[SENSOR_3_ID] = get_Standard_Deviation(&dataSensor3);
+            //currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(&dataSensor4);
             
             //lancer calcul regression??
                     
             dataCount = 0;  
         }
         else if (dataCount == SAMPLES_PER_SENSOR && !dummyButtonPRESSED)
+        {
+        }
+      */
     }
     
     return;
