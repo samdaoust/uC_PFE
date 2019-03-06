@@ -61,6 +61,9 @@
 #define SENSOR_3_ID 2
 #define SENSOR_4_ID 3
 
+#define I2C_WRITE 0
+#define I2C_READ 1
+
 #define HIGH_CURRENT_READING 60 //environ égal à 15 A
 
 
