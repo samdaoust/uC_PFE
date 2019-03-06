@@ -39,10 +39,18 @@
 
 //DEFINITIONS
 #define _XTAL_FREQ  16000000
+#define UART_BAUD_RATE 9600
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
+
 #define SAMPLES_PER_SENSOR 5
+#define FIR_VALUE 4 //value for digital filtering
+#define SLEEP_TIME 0 //should not be changed
+#define TAMPER_VALUE 2
+#define POWER_CONTROL_VALUE 0
+
+#define NUMBER_OF_SENSOR 4
 #define SENSOR_1_ADDRESS 48 //0x30
 #define SENSOR_2_ADDRESS 49 //0x31
 #define SENSOR_3_ADDRESS 50 //0x32
@@ -55,7 +63,7 @@
 
 #define HIGH_CURRENT_READING 60 //environ égal à 15 A
 
-#define NUMBER_OF_SENSOR 4
+
 
 //VARIABLES GLOBALES
 unsigned int dataSensor1[SAMPLES_PER_SENSOR];
@@ -75,12 +83,7 @@ void configure_PIC()
    OSCCONbits.SPLLEN=0;    //PLL off
    OSCCONbits.IRCF=0x0F;   //OSC frequency = 16MHz
    OSCCONbits.SCS=0x02;    //internal oscillator block
-   
-   //OSCCON = 0b01111010;
-   
-   
-   
-    //TODO RECONFIGURER AVEC NOUVEAU PIC ET PINOUT
+
     // PORT A Assignments
    
     TRISAbits.TRISA0 = INPUT_PIN;	// RA0 = ICSPDAT(used only for programming)
@@ -97,8 +100,8 @@ void configure_PIC()
     TRISCbits.TRISC4 = OUTPUT_PIN;	// RC4 = TX UART
     TRISCbits.TRISC5 = INPUT_PIN;	// RC5 = RX UART
     
-    ANSELA=0x1F;		// digital I/O
-    ANSELC=0x1F;
+    ANSELA=0x00;		// digital I/O
+    ANSELC=0x00;
 }
 
 //---------------------------------------------------------------------
@@ -112,24 +115,39 @@ void configure_Sensor(unsigned char address)
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
     
+    i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_DSPSIGSEL);
     i2c_Write(DSPSIGSEL__MAG_VAL_SEL);
     
+    i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_CTRL4);  //améliorer les lignes et commenter
-    i2c_Write(4);
+    i2c_Write(FIR_VALUE);
     
+    i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_SLTIME);
-    i2c_Write(4);
+    i2c_Write(SLEEP_TIME); 
     
+    i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_CTRL3);
-    i2c_Write(4);
+    i2c_Write(TAMPER_VALUE);
     
+    i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_POWER_CTRL);
-    i2c_Write(0);
+    i2c_Write(POWER_CONTROL_VALUE);
     
     i2c_Stop();
 }
 
+//---------------------------------------------------------------------
+//init_UART:
+//configuration du port UART pour envois des données vers FTDI
+//---------------------------------------------------------------------
+void init_UART(void)
+{
+    //baud rate and set BRGH for fast baud_rate
+    SPBRG = ((_XTAL_FREQ/16)/UART_BAUD_RATE) - 1;
+    BRGH  = 1;  // for high baud_rate
+}
 
 //---------------------------------------------------------------------
 //read_Sensor:
@@ -170,11 +188,12 @@ unsigned int get_Standard_Deviation(unsigned char *dataSensor)
                                          (dataSensor[sampleIndex] - average);
     }
     //TODO standardDeviation = sqrt(sum / SAMPLES_PER_SENSOR);
+    
+    /* ça vaut la peine de faire la racine carré? */
     standardDeviation = (sum / SAMPLES_PER_SENSOR);
     
     return standardDeviation;
 }
-
 
 //---------------------------------------------------------------------
 //calibration_Data:
@@ -184,9 +203,6 @@ void calibration_Data()
 
    
 }
-
-
-
 
 //---------------------------------------------------------------------
 //                          Main Function
@@ -198,41 +214,38 @@ void main(void)
     unsigned int dataCount = 0;
     
     //CONFIGURATION uC
+    
+    RC2 = 1;//signalisation de configuration en cours
+    __delay_ms(1000);
+    RC2 = 0;
+    __delay_ms(1000);
+
     configure_PIC();
-    
-    RC2 = 1;
-    __delay_ms(1000);
-    RC2 = 0;
-    __delay_ms(300);
-    RC2 = 1;
-    __delay_ms(1000);
-    __delay_ms(300);
-    RC2 = 0;
     i2c_Init();
-    
-    
+    init_UART();
+        
     //CONFIGURATION DES CAPTEURS
     configure_Sensor(SENSOR_1_ADDRESS);
     //configure_Sensor(SENSOR_2_ADDRESS);
     //configure_Sensor(SENSOR_3_ADDRESS);
     //configure_Sensor(SENSOR_4_ADDRESS);
     
+    RC2 = 1; //LED allumée lorsque le système est configuré
+    
     //BOUCLE DE LECTURE DES CAPTEURS
     while(1)
     {
-        RC2 = 1;
-        __delay_ms(100);
+        /* LED BLINK (test only)
         RC2 = 0;
         __delay_ms(100);
-        
-        
-        /*
+        RC2 = 1;
+        __delay_ms(100);
+        */
         for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
         {   
-            //read_Sensor(sensorIndex, bufferData);
-            //signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
+            read_Sensor(sensorIndex, bufferData);
+            signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
 
-            
             switch(sensorIndex)
             {
                 case SENSOR_1_ID:
@@ -242,8 +255,7 @@ void main(void)
                 case SENSOR_3_ID:
                     dataSensor3[dataCount] = signalMag;
                 case SENSOR_4_ID: 
-                    dataSensor4[dataCount] = signalMag; 
-                 
+                    dataSensor4[dataCount] = signalMag;        
             }
             dataCount = dataCount + 1; //% SAMPLES_PER_SENSOR; //circular buffer
         }
@@ -263,7 +275,7 @@ void main(void)
         else if (dataCount == SAMPLES_PER_SENSOR && !dummyButtonPRESSED)
         {
         }
-      */
+     
     }
     
     return;

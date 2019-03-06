@@ -21,11 +21,11 @@ void i2c_Init(void){
    // Initialise I2C MSSP
    // Master 400KHz
 
-   SSPCON1 = 0b00111000; 	// I2C enabled, Master mode, idle state high
+   SSPCON1 = 0b00101000; 	// I2C enabled, Master mode, idle state high
    SSPCON2 = 0x00;
    // I2C Master mode, clock = FOSC/(4 * (SSPADD + 1)) 
    SSPADD = 9;    		// 400Khz @ 16Mhz Fosc
-   SSPSTAT = 0b11000000; 	// Slew rate disabled
+   SSPSTAT = 0b01000000; 	// Slew rate enabled for high speed mode (400KHz)
 }
 
 // i2c_Wait - wait for I2C transfer to finish
