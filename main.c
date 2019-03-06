@@ -16,7 +16,7 @@
 #pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
 #pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled)
 #pragma config BOREN = ON       // Brown-out Reset Enable (Brown-out Reset enabled)
-#pragma config CLKOUTEN = ON   // Clock Out Enable (CLKOUT function is disabled. I/O or oscillator function on the CLKOUT pin)
+#pragma config CLKOUTEN = OFF   // Clock Out Enable (CLKOUT function is disabled. I/O or oscillator function on the CLKOUT pin)
 #pragma config IESO = ON        // Internal/External Switchover (Internal/External Switchover mode is enabled)
 #pragma config FCMEN = ON       // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is enabled)
 
@@ -38,7 +38,7 @@
 
 
 //DEFINITIONS
-#define _XTAL_FREQ  32000000
+#define _XTAL_FREQ  16000000
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
@@ -82,14 +82,23 @@ void configure_PIC()
    
     //TODO RECONFIGURER AVEC NOUVEAU PIC ET PINOUT
     // PORT A Assignments
-    TRISAbits.TRISA0 = INPUT_PIN;	// RA0 = SDA
-    TRISAbits.TRISA1 = INPUT_PIN ;	// RA1 = SCLK
-    TRISAbits.TRISA2 = OUTPUT_PIN ;	// RA2 = LED
-    TRISAbits.TRISA3 = INPUT_PIN;	// RA3 = Vpp / bouton
-    TRISAbits.TRISA4 = INPUT_PIN;	// RA4 = TX UART
-    TRISAbits.TRISA5 = INPUT_PIN;	// RA5 =  RX UART
+   
+    TRISAbits.TRISA0 = INPUT_PIN;	// RA0 = ICSPDAT(used only for programming)
+    TRISAbits.TRISA1 = INPUT_PIN ;	// RA1 = ICSPCLK (used only for programming)
+    TRISAbits.TRISA2 = INPUT_PIN ;	// RA2 = NOT USED
+    TRISAbits.TRISA3 = INPUT_PIN;	// RA3 = VPP(used only for programming)
+    TRISAbits.TRISA4 = INPUT_PIN;	// RA4 = NOT USED
+    TRISAbits.TRISA5 = INPUT_PIN;	// RA5 = NOT USED
+    
+    TRISCbits.TRISC0 = INPUT_PIN;	// RC0 = SCL
+    TRISCbits.TRISC1 = INPUT_PIN ;	// RC1 = SDA
+    TRISCbits.TRISC2 = OUTPUT_PIN ;	// RC2 = LED
+    TRISCbits.TRISC3 = INPUT_PIN;	// RC3 = NOT USED (BUTTON)
+    TRISCbits.TRISC4 = OUTPUT_PIN;	// RC4 = TX UART
+    TRISCbits.TRISC5 = INPUT_PIN;	// RC5 = RX UART
     
     ANSELA=0x1F;		// digital I/O
+    ANSELC=0x1F;
 }
 
 //---------------------------------------------------------------------
@@ -191,11 +200,16 @@ void main(void)
     //CONFIGURATION uC
     configure_PIC();
     
-    RA2 = 1;
+    RC2 = 1;
+    __delay_ms(1000);
+    RC2 = 0;
     __delay_ms(300);
-    RA2 = 0;
+    RC2 = 1;
+    __delay_ms(1000);
     __delay_ms(300);
+    RC2 = 0;
     i2c_Init();
+    
     
     //CONFIGURATION DES CAPTEURS
     configure_Sensor(SENSOR_1_ADDRESS);
@@ -206,10 +220,10 @@ void main(void)
     //BOUCLE DE LECTURE DES CAPTEURS
     while(1)
     {
-        RA2 = 1;
-        __delay_ms(300);
-        RA2 = 0;
-        __delay_ms(300);
+        RC2 = 1;
+        __delay_ms(100);
+        RC2 = 0;
+        __delay_ms(100);
         
         
         /*
