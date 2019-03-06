@@ -141,12 +141,52 @@ void configure_Sensor(unsigned char address)
 //---------------------------------------------------------------------
 //init_UART:
 //configuration du port UART pour envois des données vers FTDI
+// inspiré de: https://circuitdigest.com/microcontroller-projects/uart-communication-using-pic16f877a
 //---------------------------------------------------------------------
 void init_UART(void)
 {
     //baud rate and set BRGH for fast baud_rate
     SPBRG = ((_XTAL_FREQ/16)/UART_BAUD_RATE) - 1;
     BRGH  = 1;  // for high baud_rate
+    
+    SYNC  = 0;    // Asynchronous
+    SPEN  = 1;    // Enable serial port pins
+    
+    TXEN  = 1;    // enable transmission
+    CREN  = 1;    // enable reception
+    
+    TX9   = 0;    // 8-bit reception selected
+    RX9   = 0;    // 8-bit reception mode selected
+}
+
+
+//---------------------------------------------------------------------
+//send__byte_UART:
+// fonction qui permet d'envoyer un byte sur le port UART
+// inspiré de: https://circuitdigest.com/microcontroller-projects/uart-communication-using-pic16f877a
+//---------------------------------------------------------------------
+void send__byte_UART(unsigned char byte)
+{
+    while(!TXIF);  // hold the program till TX buffer is free
+    TXREG = byte;  //Load the transmitter buffer with the received value
+}
+
+//---------------------------------------------------------------------
+//get_byte_UART:
+// fonction qui permet d'envoyer un byte sur le port UART
+// inspiré de: https://circuitdigest.com/microcontroller-projects/uart-communication-using-pic16f877a
+//---------------------------------------------------------------------
+unsigned char get_byte_UART(void)
+{
+    if(OERR) // check for Error 
+    {
+        CREN = 0; //If error -> Reset 
+        CREN = 1; //If error -> Reset 
+    }
+    
+    while(!RCIF);  // hold the program till RX buffer is free
+    
+    return RCREG; //receive the value and send it to main function
 }
 
 //---------------------------------------------------------------------
