@@ -106,11 +106,11 @@ void configure_PIC()
     ANSELA=0x00;		// digital I/O
     ANSELC=0x00;
     
+    //configuration interrupt
     INTCONbits.INTF = 0;        //reset the external interrupt flag
     PIE1bits.TXIE = 0; // Enable USART Transmitter interrupt
     PIE1bits.RCIE = 1;
     OPTION_REGbits.INTEDG = 1;  //interrupt on the rising edge
-    //INTCONbits.INTE = 1;        //enable the external interrupt
     INTCONbits.PEIE = 1; // Enable peripheral interrupts
     INTCONbits.GIE = 1; // Enable global interrupts
 }
@@ -197,16 +197,6 @@ unsigned int get_Standard_Deviation(unsigned int *dataSensor)
     return standardDeviation;
 }
 
-
-//---------------------------------------------------------------------
-//calibration_Data:
-//---------------------------------------------------------------------
-void calibration_Data()
-{
-
-   
-}
-
 //---------------------------------------------------------------------
 //init_UART:
 //configuration du port UART pour envois des données vers FTDI
@@ -227,7 +217,6 @@ void init_UART(void)
     TX9   = 0;    // 8-bit reception selected
     RX9   = 0;    // 8-bit reception mode selected
 }
-
 
 //---------------------------------------------------------------------
 //send__byte_UART:
@@ -275,18 +264,21 @@ void interrupt ISR(void)
     if(RCIF) // handle RX pin interrupts
     { 
         rxData = get_byte_UART();
-        
+
         if (PIC_ADDRESS == rxData)
         {
-            send_byte_UART((char)(currentSensorValues[0] & 0x00FF));
-            send_byte_UART((char)(currentSensorValues[0] >> 8));
+            for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
+            {
+                send_byte_UART((char)(currentSensorValues[sensorIndex] & 0x00FF));
+                send_byte_UART((char)(currentSensorValues[sensorIndex] >> 8));
+            }
+            //signalisation
             RC2 = 0;
-            __delay_ms(10);
+            __delay_ms(15);
             RC2 = 1;
         }
     } 
-    INTF = 0;
-
+    INTF = 0; //reset int. flag
 }
 //---------------------------------------------------------------------
 //                          Main Function
