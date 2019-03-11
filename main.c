@@ -45,7 +45,7 @@
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
-#define SAMPLES_PER_SENSOR 5
+#define SAMPLES_PER_SENSOR 10
 #define SENSOR_1_ADDRESS 48 //0x30
 #define SENSOR_2_ADDRESS 49 //0x31
 #define SENSOR_3_ADDRESS 50 //0x32
@@ -166,7 +166,7 @@ void read_Sensor(unsigned char address, unsigned char dataRead[])
 //get_Standard_Deviation:
 //calcul de l'écart type 
 //---------------------------------------------------------------------
-unsigned int get_Standard_Deviation(unsigned char *dataSensor)
+unsigned int get_Standard_Deviation(unsigned int *dataSensor)
 {
     unsigned int standardDeviation = 0;
     float average = 0;
@@ -273,6 +273,7 @@ void main(void)
     RC2 = 0;
     
     i2c_Init();
+    init_UART();
     
     //CONFIGURATION DES CAPTEURS
     configure_Sensor(SENSOR_1_ADDRESS);
@@ -311,17 +312,19 @@ void main(void)
         if (dataCount == SAMPLES_PER_SENSOR)
         {
             //update écart type
-            currentSensorValues[SENSOR_1_ID] = get_Standard_Deviation(&dataSensor1);
+            currentSensorValues[SENSOR_1_ID] = get_Standard_Deviation(dataSensor1);
             //currentSensorValues[SENSOR_2_ID] = get_Standard_Deviation(&dataSensor2);
             //currentSensorValues[SENSOR_3_ID] = get_Standard_Deviation(&dataSensor3);
             //currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(&dataSensor4);
             
             //lancer calcul regression??
             
-            send_byte_UART(currentSensorValues[0] & 0x000000FF);
-            send_byte_UART(currentSensorValues[0] & 0x0000FF00);
-            send_byte_UART(currentSensorValues[0] & 0x00FF0000);
-            send_byte_UART(currentSensorValues[0] & 0xFF000000);
+            send_byte_UART((char)(currentSensorValues[0] & 0x00FF));
+            send_byte_UART((char)(currentSensorValues[0] >> 8));
+            RC2 = 1;
+            __delay_ms(1000);
+            RC2 = 0;
+            __delay_ms(1000);
                     
             dataCount = 0;  
         }
