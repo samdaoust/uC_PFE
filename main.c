@@ -35,22 +35,23 @@
 #include "const.h"
 #include "i2c.h"
 
-#define FIR_VALUE 4 //value for digital filtering
-#define SLEEP_TIME 0 //should not be changed
-#define TAMPER_VALUE 2
-#define POWER_CONTROL_VALUE 0
-
 //DEFINITIONS
 #define _XTAL_FREQ  16000000
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
 #define SAMPLES_PER_SENSOR 10
+#define FIR_VALUE 4 //value for digital filtering
+#define SLEEP_TIME 0 //should not be changed
+#define TAMPER_VALUE 2
+#define POWER_CONTROL_VALUE 0
+#define PIC_ADDRESS 0x40 //must be different on every PIC
+
+#define NUMBER_OF_SENSOR 1
 #define SENSOR_1_ADDRESS 48 //0x30
 #define SENSOR_2_ADDRESS 49 //0x31
 #define SENSOR_3_ADDRESS 50 //0x32
 #define SENSOR_4_ADDRESS 51 //0x33
-
 #define SENSOR_1_ID 0
 #define SENSOR_2_ID 1
 #define SENSOR_3_ID 2
@@ -60,7 +61,7 @@
 
 #define HIGH_CURRENT_READING 60 //environ égal à 15 A
 
-#define NUMBER_OF_SENSOR 1
+
 
 //VARIABLES GLOBALES
 unsigned int dataSensor1[SAMPLES_PER_SENSOR];
@@ -70,6 +71,8 @@ unsigned int dataSensor4[SAMPLES_PER_SENSOR];
 unsigned int currentSensorValues[NUMBER_OF_SENSOR];
 unsigned char lowCurrentReading = 0;
 unsigned char dummyButtonPRESSED = 0;
+unsigned char RXFramingErr = 0;
+unsigned char RXOverRunErr = 0;
 
 //---------------------------------------------------------------------
 //configure_PIC:
@@ -80,12 +83,7 @@ void configure_PIC()
    OSCCONbits.SPLLEN=0;    //PLL off
    OSCCONbits.IRCF=0x0F;   //OSC frequency = 16MHz
    OSCCONbits.SCS=0x02;    //internal oscillator block
-   
-   //OSCCON = 0b01111010;
-   
-   
-   
-    //TODO RECONFIGURER AVEC NOUVEAU PIC ET PINOUT
+
     // PORT A Assignments
    
     TRISAbits.TRISA0 = INPUT_PIN;	// RA0 = ICSPDAT(used only for programming)
@@ -107,6 +105,14 @@ void configure_PIC()
     
     ANSELA=0x00;		// digital I/O
     ANSELC=0x00;
+    
+    INTCONbits.INTF = 0;        //reset the external interrupt flag
+    PIE1bits.TXIE = 0; // Enable USART Transmitter interrupt
+    PIE1bits.RCIE = 1;
+    OPTION_REGbits.INTEDG = 1;  //interrupt on the rising edge
+    //INTCONbits.INTE = 1;        //enable the external interrupt
+    INTCONbits.PEIE = 1; // Enable peripheral interrupts
+    INTCONbits.GIE = 1; // Enable global interrupts
 }
 
 //---------------------------------------------------------------------
@@ -240,18 +246,48 @@ void send_byte_UART(unsigned char byte)
 // inspiré de: https://circuitdigest.com/microcontroller-projects/uart-communication-using-pic16f877a
 //---------------------------------------------------------------------
 unsigned char get_byte_UART(void)
-{
-    if(OERR) // check for Error 
-    {
-        CREN = 0; //If error -> Reset 
-        CREN = 1; //If error -> Reset 
-    }
-    
+{    
     while(!RCIF);  // hold the program till RX buffer is free
+    
+    if(FERR)
+        {
+            RXFramingErr = 1;
+            SPEN = 0;
+            SPEN = 1;
+
+        }
+    if(OERR)
+        {
+            RXOverRunErr = 1;
+            CREN = 0;
+            CREN = 1;
+        }
     
     return RCREG; //receive the value and send it to main function
 }
+//---------------------------------------------------------------------
+//isr:
+//      Gestion des interruptions
+//---------------------------------------------------------------------
+void interrupt ISR(void)
+{
+    unsigned char rxData = 0;
+    if(RCIF) // handle RX pin interrupts
+    { 
+        rxData = get_byte_UART();
+        
+        if (PIC_ADDRESS == rxData)
+        {
+            send_byte_UART((char)(currentSensorValues[0] & 0x00FF));
+            send_byte_UART((char)(currentSensorValues[0] >> 8));
+            RC2 = 0;
+            __delay_ms(10);
+            RC2 = 1;
+        }
+    } 
+    INTF = 0;
 
+}
 //---------------------------------------------------------------------
 //                          Main Function
 //---------------------------------------------------------------------
@@ -281,14 +317,11 @@ void main(void)
     //configure_Sensor(SENSOR_3_ADDRESS);
     //configure_Sensor(SENSOR_4_ADDRESS);
     
+    RC2 = 1; // CONFIGURATION TERMINÉE, LED ALLUMÉE
+    
     //BOUCLE DE LECTURE DES CAPTEURS
     while(1)
     {
-        RC2 = 1;
-        __delay_ms(100);
-        RC2 = 0;
-        __delay_ms(100);
-
         for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
         {   
             read_Sensor(0x30, bufferData); // modifier l'adresse pour que'elle puisse être dynamique
@@ -303,8 +336,7 @@ void main(void)
                 case SENSOR_3_ID:
                     dataSensor3[dataCount] = signalMag;
                 case SENSOR_4_ID: 
-                    dataSensor4[dataCount] = signalMag; 
-                 
+                    dataSensor4[dataCount] = signalMag;   
             }
             dataCount = dataCount + 1; //% SAMPLES_PER_SENSOR; //circular buffer
         }
@@ -315,17 +347,7 @@ void main(void)
             currentSensorValues[SENSOR_1_ID] = get_Standard_Deviation(dataSensor1);
             //currentSensorValues[SENSOR_2_ID] = get_Standard_Deviation(&dataSensor2);
             //currentSensorValues[SENSOR_3_ID] = get_Standard_Deviation(&dataSensor3);
-            //currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(&dataSensor4);
-            
-            //lancer calcul regression??
-            
-            send_byte_UART((char)(currentSensorValues[0] & 0x00FF));
-            send_byte_UART((char)(currentSensorValues[0] >> 8));
-            RC2 = 1;
-            __delay_ms(1000);
-            RC2 = 0;
-            __delay_ms(1000);
-                    
+            //currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(&dataSensor4);           
             dataCount = 0;  
         }
         else if (dataCount == SAMPLES_PER_SENSOR && !dummyButtonPRESSED)
