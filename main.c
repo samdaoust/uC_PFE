@@ -40,14 +40,15 @@
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
-#define SAMPLES_PER_SENSOR 10
-#define FIR_VALUE 4 //value for digital filtering
+#define SAMPLES_PER_SENSOR 300
+#define CTRL4_MASK 0b10001000 //value for digital filtering
 #define SLEEP_TIME 0 //should not be changed
 #define TAMPER_VALUE 2
 #define POWER_CONTROL_VALUE 0
-#define PIC_ADDRESS 0x40 //must be different on every PIC
+#define PIC_ADDRESS 0x41 //must be different on every PIC
 
 #define NUMBER_OF_SENSOR 1
+#define SENSOR_STARTING_ADDRESS 48 //0X30
 #define SENSOR_1_ADDRESS 48 //0x30
 #define SENSOR_2_ADDRESS 49 //0x31
 #define SENSOR_3_ADDRESS 50 //0x32
@@ -65,9 +66,9 @@
 
 //VARIABLES GLOBALES
 unsigned int dataSensor1[SAMPLES_PER_SENSOR];
-unsigned int dataSensor2[SAMPLES_PER_SENSOR];
-unsigned int dataSensor3[SAMPLES_PER_SENSOR];
-unsigned int dataSensor4[SAMPLES_PER_SENSOR];
+//unsigned int dataSensor2[SAMPLES_PER_SENSOR];
+//unsigned int dataSensor3[SAMPLES_PER_SENSOR];
+//unsigned int dataSensor4[SAMPLES_PER_SENSOR];
 unsigned int currentSensorValues[NUMBER_OF_SENSOR];
 unsigned char lowCurrentReading = 0;
 unsigned char dummyButtonPRESSED = 0;
@@ -126,24 +127,32 @@ void configure_Sensor(unsigned char address)
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
-    i2c_Restart();
     
+    i2c_Restart();
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
+    
+    i2c_Restart();
+    i2c_Address(address, I2C_WRITE);
+    i2c_Write(SI72XX_DSPSIGSEL);  //améliorer les lignes et commenter
+    i2c_Write(0);
+    
     i2c_Restart();
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_CTRL4);  //améliorer les lignes et commenter
-    i2c_Write(FIR_VALUE);
+    i2c_Write(CTRL4_MASK);
+    
     i2c_Restart();
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_SLTIME);
-    i2c_Write(SLEEP_TIME); 
+    i2c_Write(SLEEP_TIME);
+    
     i2c_Restart();
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_CTRL3);
     i2c_Write(TAMPER_VALUE);
-    i2c_Address(address, I2C_WRITE);
+    
     i2c_Restart();
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_POWER_CTRL);
@@ -172,29 +181,27 @@ void read_Sensor(unsigned char address, unsigned char dataRead[])
 //get_Standard_Deviation:
 //calcul de l'écart type 
 //---------------------------------------------------------------------
-unsigned int get_Standard_Deviation(unsigned int *dataSensor)
+long double get_Variance(unsigned int *dataSensor)
 {
-    unsigned int standardDeviation = 0;
-    float average = 0;
-    unsigned int sum = 0;
+    double variance = 0;
+    double average = 0;
+    double sum = 0;
     
     //calcul de la moyenne
     for(unsigned int sampleIndex = 0; sampleIndex<SAMPLES_PER_SENSOR;sampleIndex++)
     {
-        average += dataSensor[sampleIndex];
+        average += (double)dataSensor[sampleIndex];
     }
     average = average / SAMPLES_PER_SENSOR;
            
     //calcul de l'écart-type
     for(unsigned int sampleIndex = 0; sampleIndex<SAMPLES_PER_SENSOR;sampleIndex++)
     {
-        sum+= (dataSensor[sampleIndex] - average) * 
-                                         (dataSensor[sampleIndex] - average);
+        sum+= ((double)dataSensor[sampleIndex] - average) * ((double)dataSensor[sampleIndex] - average);
     }
-    //TODO standardDeviation = sqrt(sum / SAMPLES_PER_SENSOR);
-    standardDeviation = (sum / SAMPLES_PER_SENSOR);
+    variance = (sum / (SAMPLES_PER_SENSOR - 1));
     
-    return standardDeviation;
+    return variance;
 }
 
 //---------------------------------------------------------------------
@@ -269,8 +276,11 @@ void interrupt ISR(void)
         {
             for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
             {
-                send_byte_UART((char)(currentSensorValues[sensorIndex] & 0x00FF));
-                send_byte_UART((char)(currentSensorValues[sensorIndex] >> 8));
+                send_byte_UART((char)PIC_ADDRESS);
+                send_byte_UART((char)(currentSensorValues[sensorIndex] >> 8)); //LSBs first
+                send_byte_UART((char)(currentSensorValues[sensorIndex] & 0x00FF)); //MSBs
+                //send_byte_UART(10);
+                //send_byte_UART(1);
             }
             //signalisation
             RC2 = 0;
@@ -288,6 +298,7 @@ void main(void)
     unsigned char bufferData[2];
     unsigned int signalMag = 0;
     unsigned int dataCount = 0;
+    unsigned int test = 0;
     
     //CONFIGURATION uC
     configure_PIC();
@@ -310,13 +321,24 @@ void main(void)
     //configure_Sensor(SENSOR_4_ADDRESS);
     
     RC2 = 1; // CONFIGURATION TERMINÉE, LED ALLUMÉE
+   
+    /*
+    i2c_Start();
+    i2c_Address(0x30, I2C_WRITE);
+    i2c_Write(SI72XX_CTRL4);
+    i2c_Restart();
+    i2c_Address(0x30, I2C_READ);
+    test = i2c_Read(0);
+    i2c_Stop();
+    */
+    
     
     //BOUCLE DE LECTURE DES CAPTEURS
     while(1)
     {
         for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
         {   
-            read_Sensor(0x30, bufferData); // modifier l'adresse pour que'elle puisse être dynamique
+            read_Sensor((0x30), bufferData); 
             signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
             
             switch(sensorIndex)
@@ -324,11 +346,11 @@ void main(void)
                 case SENSOR_1_ID:
                     dataSensor1[dataCount] = signalMag;
                 case SENSOR_2_ID:
-                    dataSensor2[dataCount] = signalMag;
+                    dataSensor1[dataCount] = signalMag; //changer le nom apres test
                 case SENSOR_3_ID:
-                    dataSensor3[dataCount] = signalMag;
+                    dataSensor1[dataCount] = signalMag;
                 case SENSOR_4_ID: 
-                    dataSensor4[dataCount] = signalMag;   
+                    dataSensor1[dataCount] = signalMag;   
             }
             dataCount = dataCount + 1; //% SAMPLES_PER_SENSOR; //circular buffer
         }
@@ -336,7 +358,7 @@ void main(void)
         if (dataCount == SAMPLES_PER_SENSOR)
         {
             //update écart type
-            currentSensorValues[SENSOR_1_ID] = get_Standard_Deviation(dataSensor1);
+            currentSensorValues[SENSOR_1_ID] = (int)get_Variance(dataSensor1);
             //currentSensorValues[SENSOR_2_ID] = get_Standard_Deviation(&dataSensor2);
             //currentSensorValues[SENSOR_3_ID] = get_Standard_Deviation(&dataSensor3);
             //currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(&dataSensor4);           
