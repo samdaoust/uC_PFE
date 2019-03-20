@@ -352,8 +352,8 @@ void main(void)
                 case SENSOR_4_ID: 
                     dataSensor1[dataCount] = signalMag;   
             }
-            dataCount = dataCount + 1; //% SAMPLES_PER_SENSOR; //circular buffer
         }
+        dataCount = dataCount + 1 % SAMPLES_PER_SENSOR; //circular buffer
         
         if (dataCount == SAMPLES_PER_SENSOR)
         {
