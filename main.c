@@ -40,14 +40,14 @@
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
-#define SAMPLES_PER_SENSOR 300
+#define SAMPLES_PER_SENSOR 100
 #define CTRL4_MASK 0b10001000 //value for digital filtering
 #define SLEEP_TIME 0 //should not be changed
 #define TAMPER_VALUE 2
 #define POWER_CONTROL_VALUE 0
 #define PIC_ADDRESS 0x41 //must be different on every PIC
 
-#define NUMBER_OF_SENSOR 1
+#define NUMBER_OF_SENSOR 4
 #define SENSOR_STARTING_ADDRESS 48 //0X30
 #define SENSOR_1_ADDRESS 48 //0x30
 #define SENSOR_2_ADDRESS 49 //0x31
@@ -62,13 +62,11 @@
 
 #define HIGH_CURRENT_READING 60 //environ égal à 15 A
 
-
-
 //VARIABLES GLOBALES
 unsigned int dataSensor1[SAMPLES_PER_SENSOR];
-//unsigned int dataSensor2[SAMPLES_PER_SENSOR];
-//unsigned int dataSensor3[SAMPLES_PER_SENSOR];
-//unsigned int dataSensor4[SAMPLES_PER_SENSOR];
+unsigned int dataSensor2[SAMPLES_PER_SENSOR];
+unsigned int dataSensor3[SAMPLES_PER_SENSOR];
+unsigned int dataSensor4[SAMPLES_PER_SENSOR];
 unsigned int currentSensorValues[NUMBER_OF_SENSOR];
 unsigned char lowCurrentReading = 0;
 unsigned char dummyButtonPRESSED = 0;
@@ -274,9 +272,9 @@ void interrupt ISR(void)
 
         if (PIC_ADDRESS == rxData)
         {
+            send_byte_UART((char)PIC_ADDRESS);
             for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
             {
-                send_byte_UART((char)PIC_ADDRESS);
                 send_byte_UART((char)(currentSensorValues[sensorIndex] >> 8)); //LSBs first
                 send_byte_UART((char)(currentSensorValues[sensorIndex] & 0x00FF)); //MSBs
                 //send_byte_UART(10);
@@ -316,9 +314,9 @@ void main(void)
     
     //CONFIGURATION DES CAPTEURS
     configure_Sensor(SENSOR_1_ADDRESS);
-    //configure_Sensor(SENSOR_2_ADDRESS);
-    //configure_Sensor(SENSOR_3_ADDRESS);
-    //configure_Sensor(SENSOR_4_ADDRESS);
+    configure_Sensor(SENSOR_2_ADDRESS);
+    configure_Sensor(SENSOR_3_ADDRESS);
+    configure_Sensor(SENSOR_4_ADDRESS);
     
     RC2 = 1; // CONFIGURATION TERMINÉE, LED ALLUMÉE
    
@@ -358,14 +356,11 @@ void main(void)
         if (dataCount == SAMPLES_PER_SENSOR)
         {
             //update écart type
-            currentSensorValues[SENSOR_1_ID] = (int)get_Variance(dataSensor1);
-            //currentSensorValues[SENSOR_2_ID] = get_Standard_Deviation(&dataSensor2);
-            //currentSensorValues[SENSOR_3_ID] = get_Standard_Deviation(&dataSensor3);
-            //currentSensorValues[SENSOR_4_ID] = get_Standard_Deviation(&dataSensor4);           
+            currentSensorValues[SENSOR_1_ID] = (unsigned int)get_Variance(dataSensor1);
+            currentSensorValues[SENSOR_2_ID] = (unsigned int)get_Variance(dataSensor2);
+            currentSensorValues[SENSOR_3_ID] = (unsigned int)get_Variance(dataSensor3);
+            currentSensorValues[SENSOR_4_ID] = (unsigned int)get_Variance(dataSensor4);           
             dataCount = 0;  
-        }
-        else if (dataCount == SAMPLES_PER_SENSOR && !dummyButtonPRESSED)
-        {
         }
     }
     
