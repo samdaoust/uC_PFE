@@ -319,24 +319,13 @@ void main(void)
     configure_Sensor(SENSOR_4_ADDRESS);
     
     RC2 = 1; // CONFIGURATION TERMINÉE, LED ALLUMÉE
-   
-    /*
-    i2c_Start();
-    i2c_Address(0x30, I2C_WRITE);
-    i2c_Write(SI72XX_CTRL4);
-    i2c_Restart();
-    i2c_Address(0x30, I2C_READ);
-    test = i2c_Read(0);
-    i2c_Stop();
-    */
-    
     
     //BOUCLE DE LECTURE DES CAPTEURS
     while(1)
     {
         for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
         {   
-            read_Sensor((0x30), bufferData); 
+            read_Sensor(((0x30)+sensorIndex), bufferData); 
             signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
             
             switch(sensorIndex)
@@ -344,11 +333,11 @@ void main(void)
                 case SENSOR_1_ID:
                     dataSensor1[dataCount] = signalMag;
                 case SENSOR_2_ID:
-                    dataSensor1[dataCount] = signalMag; //changer le nom apres test
+                    dataSensor2[dataCount] = signalMag; //changer le nom apres test
                 case SENSOR_3_ID:
-                    dataSensor1[dataCount] = signalMag;
+                    dataSensor3[dataCount] = signalMag;
                 case SENSOR_4_ID: 
-                    dataSensor1[dataCount] = signalMag;   
+                    dataSensor4[dataCount] = signalMag;   
             }
         }
         dataCount = dataCount + 1 % SAMPLES_PER_SENSOR; //circular buffer
