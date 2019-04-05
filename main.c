@@ -8,6 +8,7 @@
  */
 
 
+
 // CONFIG1
 #pragma config FOSC = INTOSC    // Oscillator Selection (INTOSC oscillator: I/O function on CLKIN pin)
 #pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
@@ -30,13 +31,13 @@
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
 
-
 #include <xc.h>
 #include "const.h"
 #include "i2c.h"
 
+
 //DEFINITIONS
-#define _XTAL_FREQ  16000000
+#define _XTAL_FREQ  32000000
 #define DEVICE_CONTROL_CODE  0b1010
 #define INPUT_PIN 1
 #define OUTPUT_PIN 0
@@ -72,6 +73,8 @@ unsigned char lowCurrentReading = 0;
 unsigned char dummyButtonPRESSED = 0;
 unsigned char RXFramingErr = 0;
 unsigned char RXOverRunErr = 0;
+//double average[NUMBER_OF_SENSOR];     
+ 
 
 //---------------------------------------------------------------------
 //configure_PIC:
@@ -79,9 +82,12 @@ unsigned char RXOverRunErr = 0;
 //---------------------------------------------------------------------
 void configure_PIC()
 {
-   OSCCONbits.SPLLEN=0;    //PLL off
-   OSCCONbits.IRCF=0x0F;   //OSC frequency = 16MHz
-   OSCCONbits.SCS=0x02;    //internal oscillator block
+    
+   //OSCCONbits.SPLLEN=0;    //PLL 
+   OSCCONbits.IRCF=0x0E;   //OSC frequency = 8MHz
+   OSCCONbits.SCS=0x00;    //internal oscillator block
+   OSCTUNE=31;
+   
 
     // PORT A Assignments
    
@@ -121,12 +127,13 @@ void configure_PIC()
 void configure_Sensor(unsigned char address)
 {
     i2c_Start();
-    
+    /* wtf ca marche maintenant
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
     
     i2c_Restart();
+    */
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
@@ -179,26 +186,31 @@ void read_Sensor(unsigned char address, unsigned char dataRead[])
 //get_Standard_Deviation:
 //calcul de l'écart type 
 //---------------------------------------------------------------------
-long double get_Variance(unsigned int *dataSensor)
+long double get_Variance(unsigned int *dataSensor, unsigned char sensorID)
 {
     double variance = 0;
-    double average = 0;
     double sum = 0;
+    double buffer = 0;
+    double average =0;
     
+   
     //calcul de la moyenne
     for(unsigned int sampleIndex = 0; sampleIndex<SAMPLES_PER_SENSOR;sampleIndex++)
     {
         average += (double)dataSensor[sampleIndex];
     }
+    
+    
     average = average / SAMPLES_PER_SENSOR;
            
     //calcul de l'écart-type
     for(unsigned int sampleIndex = 0; sampleIndex<SAMPLES_PER_SENSOR;sampleIndex++)
     {
-        sum+= ((double)dataSensor[sampleIndex] - average) * ((double)dataSensor[sampleIndex] - average);
+        buffer=((double)dataSensor[sampleIndex] - average);
+        sum += buffer * buffer;
     }
     variance = (sum / (SAMPLES_PER_SENSOR - 1));
-    
+    //average[sensorID]=0;
     return variance;
 }
 
@@ -248,7 +260,6 @@ unsigned char get_byte_UART(void)
             RXFramingErr = 1;
             SPEN = 0;
             SPEN = 1;
-
         }
     if(OERR)
         {
@@ -281,9 +292,9 @@ void interrupt ISR(void)
                 //send_byte_UART(1);
             }
             //signalisation
-            RC2 = 0;
-            __delay_ms(15);
-            RC2 = 1;
+           RC2 = 0;
+           __delay_ms(15);
+           RC2 = 1;
         }
     } 
     INTF = 0; //reset int. flag
@@ -325,32 +336,36 @@ void main(void)
     {
         for (unsigned char sensorIndex= 0; sensorIndex<NUMBER_OF_SENSOR; sensorIndex++)
         {   
+
             read_Sensor(((0x30)+sensorIndex), bufferData); 
             signalMag = (bufferData[0] & 0x7F) << 8 | bufferData[1];
-            
+
             switch(sensorIndex)
             {
                 case SENSOR_1_ID:
                     dataSensor1[dataCount] = signalMag;
                 case SENSOR_2_ID:
-                    dataSensor2[dataCount] = signalMag; //changer le nom apres test
+                    dataSensor2[dataCount] = signalMag; 
                 case SENSOR_3_ID:
                     dataSensor3[dataCount] = signalMag;
                 case SENSOR_4_ID: 
                     dataSensor4[dataCount] = signalMag;   
             }
+            
+            //average[sensorIndex] += signalMag;
+        
         }
         dataCount = dataCount + 1 % SAMPLES_PER_SENSOR; //circular buffer
         
         if (dataCount == SAMPLES_PER_SENSOR)
         {
-            //update écart type
-            currentSensorValues[SENSOR_1_ID] = (unsigned int)get_Variance(dataSensor1);
-            currentSensorValues[SENSOR_2_ID] = (unsigned int)get_Variance(dataSensor2);
-            currentSensorValues[SENSOR_3_ID] = (unsigned int)get_Variance(dataSensor3);
-            currentSensorValues[SENSOR_4_ID] = (unsigned int)get_Variance(dataSensor4);           
-            dataCount = 0;  
+            currentSensorValues[SENSOR_1_ID] = (unsigned int)get_Variance(dataSensor1,SENSOR_1_ID);
+            currentSensorValues[SENSOR_2_ID] = (unsigned int)get_Variance(dataSensor2,SENSOR_2_ID);
+            currentSensorValues[SENSOR_3_ID] = (unsigned int)get_Variance(dataSensor3,SENSOR_3_ID);
+            currentSensorValues[SENSOR_4_ID] = (unsigned int)get_Variance(dataSensor4,SENSOR_4_ID);           
+            dataCount = 0; 
         }
+ 
     }
     
     return;
