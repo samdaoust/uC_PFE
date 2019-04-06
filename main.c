@@ -127,13 +127,12 @@ void configure_PIC()
 void configure_Sensor(unsigned char address)
 {
     i2c_Start();
-    /* wtf ca marche maintenant
+    // wtf ca marche maintenant
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
     
     i2c_Restart();
-    */
     i2c_Address(address, I2C_WRITE);
     i2c_Write(SI72XX_ARAUTOINC);
     i2c_Write(ARAUTOINC__ARAUTOINC_MASK);
